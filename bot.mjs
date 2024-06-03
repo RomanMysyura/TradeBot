@@ -42,7 +42,7 @@ async function fetchBitcoinPrice() {
       const percentageChange = ((price - purchasePrice) / purchasePrice) * 100;
       if (percentageChange <= -0.1 || percentageChange >= 0.3) {
         sellPrice = price;
-        const profit = calculateProfit(price, purchasePrice);
+        const profit = ((calculateProfit(price, purchasePrice)) - (purchaseAmount * 0.001));
         totalProfit += profit;
         console.log(chalk.red(`SELL signal at: ${sellPrice} USDT`));
         console.log(chalk.yellow(`Profit for this transaction: ${profit} USDT`));
