@@ -3,18 +3,15 @@ import chalk from 'chalk';
 import Table from 'cli-table3';
 
 let transactions = []; // Transaction records
+const maxTransactions = 3; // Máximo número de transacciones simultáneas
 let currentTransaction = null; // Current transaction in progress
 const prices = [];
 const longSmaPeriod = 50; // Slow moving average period
 const shortSmaPeriod = 20; // Fast moving average period
-let lastSignal = null;
 let principalBalance = 10000; // Initial principal balance
 let balance = principalBalance; // Current balance
 const purchaseAmount = 4000; // Amount to purchase in USDT
-let purchasePrice = 0;
-let sellPrice = 0;
 let totalProfit = 0;
-let bought = false; // Purchase status
 
 let table = createTable();
 
@@ -26,7 +23,26 @@ async function fetchBitcoinPrice() {
 
     prices.push(price);
 
-    if (!bought) {
+    // Loop through active transactions to check for sell signals
+    transactions.forEach((transaction, index) => {
+      if (!transaction.sold) {
+        const percentageChange = ((price - transaction.purchasePrice) / transaction.purchasePrice) * 100;
+        if (percentageChange <= -0.001 || percentageChange >= 0.003) {
+          transaction.sold = true;
+          transaction.sellPrice = price;
+          const profit = calculateProfit(price, transaction.purchasePrice);
+          totalProfit += profit;
+          console.log(chalk.red(`SELL signal at: ${price} USDT`));
+          console.log(chalk.yellow(`Profit for this transaction: ${profit} USDT`));
+          console.log(chalk.yellow(`Total profit: ${totalProfit} USDT`));
+          balance += profit; // Adjust balance based on profit/loss
+          console.log(chalk.yellow(`Balance: ${balance} USDT`));
+        }
+      }
+    });
+
+    // Check for buy signal if there are less than maxTransactions active transactions
+    if (transactions.length < maxTransactions) {
       if (prices.length >= longSmaPeriod) {
         const shortSma = calculateSma(prices, shortSmaPeriod);
         const longSma = calculateSma(prices, longSmaPeriod);
@@ -37,27 +53,6 @@ async function fetchBitcoinPrice() {
         }
       } else {
         updateTable(price, null);
-      }
-    } else {
-      const percentageChange = ((price - purchasePrice) / purchasePrice) * 100;
-      if (percentageChange <= -0.001 || percentageChange >= 0.003) {
-        sellPrice = price;
-        // const profit = ((calculateProfit(price, purchasePrice)) - (purchaseAmount * 0.001));
-        const profit = ((calculateProfit(price, purchasePrice)));
-        totalProfit += profit;
-        console.log(chalk.red(`SELL signal at: ${sellPrice} USDT`));
-        console.log(chalk.yellow(`Profit for this transaction: ${profit} USDT`));
-        console.log(chalk.yellow(`Total profit: ${totalProfit} USDT`));
-        currentTransaction.sell = sellPrice;
-        currentTransaction.profit = profit;
-        transactions.push(currentTransaction);
-        bought = false;
-        principalBalance += profit; // Adjust principal balance based on profit/loss
-        balance = principalBalance; // Reset balance to principal balance
-        resetTransaction(); // Reset transaction details for the next transaction
-        resetEverythingExceptTransactionRecords(); // Reset everything except transaction records
-      } else {
-        updateTable(price);
       }
     }
   } catch (error) {
@@ -88,19 +83,20 @@ function calculateSma(data, period) {
 }
 
 function determineSignal(shortSma, longSma, currentPrice) {
-  if (shortSma > longSma && lastSignal !== 'buy' && balance >= purchaseAmount) {
-    lastSignal = 'buy';
-    purchasePrice = currentPrice;
-    console.log(chalk.green(`BUY signal at: ${purchasePrice} USDT`));
-    bought = true;
-    currentTransaction = {
-      buy: purchasePrice,
-      sell: null,
-      profit: null
-    };
-    balance -= purchaseAmount; // Adjust balance for purchase
-    console.log(chalk.yellow(`Balance after purchase: ${balance} USDT`));
-    return 'buy';
+  if (shortSma > longSma) {
+    if (balance >= purchaseAmount) {
+      const transaction = {
+        purchasePrice: currentPrice,
+        sold: false
+      };
+      transactions.push(transaction);
+      console.log(chalk.green(`BUY signal at: ${currentPrice} USDT`));
+      balance -= purchaseAmount; // Adjust balance for purchase
+      console.log(chalk.yellow(`Balance after purchase: ${balance} USDT`));
+      return 'buy';
+    } else {
+      console.log(chalk.yellow('Insufficient balance for purchase'));
+    }
   }
   return null;
 }
@@ -114,10 +110,13 @@ function calculateProfit(sellPrice, purchasePrice) {
 
 function updateTable(currentPrice, signal) {
   const newTable = createTable();
+  const soldTransactions = transactions.filter(transaction => transaction.sold);
+  const unsoldTransactions = transactions.filter(transaction => !transaction.sold);
+
   newTable.push([
     currentPrice.toFixed(2) + ' USDT',
-    purchasePrice ? purchasePrice.toFixed(2) + ' USDT' : '-',
-    sellPrice ? sellPrice.toFixed(2) + ' USDT' : '-',
+    unsoldTransactions.map(transaction => transaction.purchasePrice.toFixed(2) + ' USDT').join(', ') || '-',
+    soldTransactions.map(transaction => transaction.sellPrice.toFixed(2) + ' USDT').join(', ') || '-',
     totalProfit.toFixed(2) + ' USDT',
     balance.toFixed(8) + ' USDT'
   ]);
@@ -125,25 +124,7 @@ function updateTable(currentPrice, signal) {
   console.clear();
   console.log(newTable.toString());
 
-  if (transactions.length > 0) {
-    console.log('\nTransaction Records:');
-    console.table(transactions);
-    const totalTransactionProfit = transactions.reduce((total, transaction) => total + transaction.profit, 0);
-    console.log(chalk.yellow(`Total Profit from All Transactions: ${totalTransactionProfit.toFixed(2)} USDT`));
-  }
-
   table = newTable;
-}
-
-function resetTransaction() {
-  currentTransaction = null;
-  purchasePrice = 0;
-  sellPrice = 0;
-}
-
-function resetEverythingExceptTransactionRecords() {
-  prices.length = 0;
-  lastSignal = null;
 }
 
 setInterval(fetchBitcoinPrice, 150);

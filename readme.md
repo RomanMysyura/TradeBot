@@ -2,6 +2,9 @@
 
 This is a simple Bitcoin trading bot built with Node.js that automates buying and selling based on a set of predefined signals.
 
+![Bot](https://ejemplo.com/logo.png)
+
+
 ## Features
 
 - Automated buying and selling of Bitcoin based on predefined signals.
