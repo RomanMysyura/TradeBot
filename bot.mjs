@@ -8,7 +8,9 @@ const prices = [];
 const longSmaPeriod = 50; // Slow moving average period
 const shortSmaPeriod = 20; // Fast moving average period
 let lastSignal = null;
-let balance = 30; // Initial principal balance
+let principalBalance = 1000; // Initial principal balance
+let balance = principalBalance; // Current balance
+const purchaseAmount = 200; // Amount to purchase in USDT
 let purchasePrice = 0;
 let sellPrice = 0;
 let totalProfit = 0;
@@ -38,9 +40,9 @@ async function fetchBitcoinPrice() {
       }
     } else {
       const percentageChange = ((price - purchasePrice) / purchasePrice) * 100;
-      if (percentageChange <= -0.001 || percentageChange >= 0.001) {
+      if (percentageChange <= -0.1 || percentageChange >= 0.3) {
         sellPrice = price;
-        const profit = sellPrice - purchasePrice;
+        const profit = calculateProfit(price, purchasePrice);
         totalProfit += profit;
         console.log(chalk.red(`SELL signal at: ${sellPrice} USDT`));
         console.log(chalk.yellow(`Profit for this transaction: ${profit} USDT`));
@@ -49,7 +51,8 @@ async function fetchBitcoinPrice() {
         currentTransaction.profit = profit;
         transactions.push(currentTransaction);
         bought = false;
-        balance += profit; // Adjust balance based on profit/loss
+        principalBalance += profit; // Adjust principal balance based on profit/loss
+        balance = principalBalance; // Reset balance to principal balance
         resetTransaction(); // Reset transaction details for the next transaction
         resetEverythingExceptTransactionRecords(); // Reset everything except transaction records
       } else {
@@ -84,7 +87,7 @@ function calculateSma(data, period) {
 }
 
 function determineSignal(shortSma, longSma, currentPrice) {
-  if (shortSma > longSma && lastSignal !== 'buy' && balance >= 10) {
+  if (shortSma > longSma && lastSignal !== 'buy' && balance >= purchaseAmount) {
     lastSignal = 'buy';
     purchasePrice = currentPrice;
     console.log(chalk.green(`BUY signal at: ${purchasePrice} USDT`));
@@ -94,12 +97,18 @@ function determineSignal(shortSma, longSma, currentPrice) {
       sell: null,
       profit: null
     };
-    // Realizar la compra por una cantidad fija de $10
-    balance -= 10; // Restar $10 del balance
+    balance -= purchaseAmount; // Adjust balance for purchase
     console.log(chalk.yellow(`Balance after purchase: ${balance} USDT`));
     return 'buy';
   }
   return null;
+}
+
+function calculateProfit(sellPrice, purchasePrice) {
+  const btcAmount = purchaseAmount / purchasePrice; // Cantidad de BTC comprados
+  const sellValue = btcAmount * sellPrice; // Valor de venta en USDT
+  const profit = sellValue - purchaseAmount; // Beneficio (restando el valor de compra)
+  return profit;
 }
 
 function updateTable(currentPrice, signal) {
@@ -109,7 +118,7 @@ function updateTable(currentPrice, signal) {
     purchasePrice ? purchasePrice.toFixed(2) + ' USDT' : '-',
     sellPrice ? sellPrice.toFixed(2) + ' USDT' : '-',
     totalProfit.toFixed(2) + ' USDT',
-    balance.toFixed(2) + ' USDT'
+    balance.toFixed(8) + ' USDT'
   ]);
 
   console.clear();
@@ -134,8 +143,6 @@ function resetTransaction() {
 function resetEverythingExceptTransactionRecords() {
   prices.length = 0;
   lastSignal = null;
-  balance = 30;
-  totalProfit = 0;
 }
 
 setInterval(fetchBitcoinPrice, 250);
