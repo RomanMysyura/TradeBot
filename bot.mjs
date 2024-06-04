@@ -50,6 +50,7 @@ async function fetchBitcoinPrice() {
         console.log(chalk.yellow(`Total profit: ${totalProfit} USDT`));
         currentTransaction.sell = sellPrice;
         currentTransaction.profit = profit;
+        currentTransaction.durationTime = calculateDuration(currentTransaction.startTime); // Calculate duration
         transactions.push(currentTransaction);
         bought = false;
         principalBalance += profit; // Adjust principal balance based on profit/loss
@@ -72,9 +73,10 @@ function createTable() {
       chalk.green('Purchase Price'),
       chalk.red('Sell Price'),
       chalk.yellow('Total Profit'),
-      chalk.blue('Total Balance')
+      chalk.blue('Total Balance'),
+      chalk.magenta('Duration Time') // New column header
     ],
-    colWidths: [30, 30, 30, 30, 30]
+    colWidths: [30, 30, 30, 30, 30, 30]
   });
 }
 
@@ -96,7 +98,8 @@ function determineSignal(shortSma, longSma, currentPrice) {
     currentTransaction = {
       buy: purchasePrice,
       sell: null,
-      profit: null
+      profit: null,
+      startTime: new Date() // Store start time
     };
     balance -= purchaseAmount; // Adjust balance for purchase
     console.log(chalk.yellow(`Balance after purchase: ${balance} USDT`));
@@ -119,7 +122,8 @@ function updateTable(currentPrice, signal) {
     purchasePrice ? purchasePrice.toFixed(2) + ' USDT' : '-',
     sellPrice ? sellPrice.toFixed(2) + ' USDT' : '-',
     totalProfit.toFixed(2) + ' USDT',
-    balance.toFixed(8) + ' USDT'
+    balance.toFixed(8) + ' USDT',
+    currentTransaction && currentTransaction.startTime ? calculateDuration(currentTransaction.startTime) : '-' // Duration time
   ]);
 
   console.clear();
@@ -144,6 +148,15 @@ function resetTransaction() {
 function resetEverythingExceptTransactionRecords() {
   prices.length = 0;
   lastSignal = null;
+}
+
+function calculateDuration(startTime) {
+  const endTime = new Date();
+  const duration = endTime - startTime;
+  const seconds = Math.floor((duration / 1000) % 60);
+  const minutes = Math.floor((duration / (1000 * 60)) % 60);
+  const hours = Math.floor((duration / (1000 * 60 * 60)) % 24);
+  return `${hours}h ${minutes}m ${seconds}s`;
 }
 
 setInterval(fetchBitcoinPrice, 150);
